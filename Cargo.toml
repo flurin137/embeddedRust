@@ -1,9 +1,13 @@
 [package]
-name = "embeddedRust"
-version = "0.0.1"
 authors = ["Fx137 <flufeu@gmail.com>"]
 edition = "2018"
+name = "embeddedRust"
+version = "0.0.1"
 
+[[bin]]
+name = "embeddedRust"
+test = false
+bench = false
 
 [dependencies]
 cortex-m = "0.6.2"
