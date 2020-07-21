@@ -11,3 +11,7 @@
 
 # Check if board responses
     openocd -f interface/stlink.cfg -f target/stm32f0x.cfg
+
+
+# Build for M0
+    cargo build --target thumbv6m-none-eabi
