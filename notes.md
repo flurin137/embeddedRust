@@ -14,5 +14,14 @@
     cargo build
 
 # inspect compied data
-    cargo readobj --bin embeddedRust -- -file-headers
-    cargo size --bin embeddedRust --release -- -A
+    cargo readobj --bin embedded_rust -- -file-headers
+    cargo size --bin embedded_rust --release -- -A
+
+# memory.x 
+* from https://www.st.com/resource/en/datasheet/stm32f103rb.pdf (P34)
+
+
+# debug
+    arm-none-eabi-gdb
+    arm-none-eabi-gdb -q ".\target\thumbv6m-none-eabi\debug\embedded_rust"
+    target remote :3333

@@ -1,2 +1,5 @@
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+runner = "arm-none-eabi-gdb -x openocd.gdb"
+
 [build]
 target = "thumbv6m-none-eabi"    # Cortex-M0 and Cortex-M0+
