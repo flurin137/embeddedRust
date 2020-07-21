@@ -8,6 +8,8 @@ break DefaultHandler
 break HardFault
 break rust_begin_unwind
 
+break main
+
 monitor arm semihosting enable
 
 load
