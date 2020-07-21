@@ -1,11 +1,11 @@
 [package]
 authors = ["Fx137 <flufeu@gmail.com>"]
 edition = "2018"
-name = "embeddedRust"
+name = "embedded_rust"
 version = "0.0.1"
 
 [[bin]]
-name = "embeddedRust"
+name = "embedded_rust"
 test = false
 bench = false
 
