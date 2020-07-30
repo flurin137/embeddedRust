@@ -12,7 +12,7 @@ panic-halt = "0.2.0"
 
 [dependencies.stm32l0xx-hal]
 version = "0.6.2"
-features = ["stm32l0x3"]
+features = ["stm32l0x3", "rt"]
 
 [[bin]]
 name = "embedded_rust"
