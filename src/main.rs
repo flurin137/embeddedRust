@@ -4,32 +4,52 @@
 use panic_halt as _;
 use cortex_m_rt::entry;
 
-use stm32l0xx_hal::{pac, prelude::*, rcc::Config};
+use stm32l0xx_hal::{pac, prelude::*, pwm, rcc::Config};
 
 #[entry]
 fn main() -> ! {
-    let digital_out = pac::Peripherals::take().unwrap();
+    let board_peripherals = pac::Peripherals::take().unwrap();
+    let cortex_peripherals = cortex_m::Peripherals::take().unwrap();
 
-    let mut clock = digital_out.RCC.freeze(Config::hsi16());
+    let mut clock = board_peripherals.RCC.freeze(Config::hsi16());
 
-    let gpioa = digital_out.GPIOA.split(&mut clock);
-    let gpioc = digital_out.GPIOC.split(&mut clock);
+    let mut delay = cortex_peripherals.SYST.delay(clock.clocks);
 
-    let mut led = gpioa.pa5.into_push_pull_output();
+    let gpioa = board_peripherals.GPIOA.split(&mut clock);
+    let gpiob = board_peripherals.GPIOB.split(&mut clock);
+    let gpioc = board_peripherals.GPIOC.split(&mut clock);
+
     let button = gpioc.pc13.into_pull_up_input();
 
-    loop {
-        let limit = match button.is_high() {
-            Ok(true) => 1_000_000,
-            Ok(false) => 300_000,
-            _ => unreachable!(),
-        };
+    // Initialize TIM2 for PWM
+    let timer2 = pwm::Timer::new(board_peripherals.TIM2, 10.khz(), &mut clock);
 
-        for _ in 0..limit {
-            led.set_high().unwrap();
-        }
-        for _ in 0..limit {
-            led.set_low().unwrap();
+    let mut pwm1 = timer2.channel2.assign(gpiob.pb3);
+    let mut pwm2 = timer2.channel3.assign(gpiob.pb10);
+
+    loop {
+        let limit : u16 = match button.is_high() {
+            Ok(true) => 4,
+            Ok(false) => 1,
+            _ => 1,
+        };
+        
+        let max1 = pwm1.get_max_duty() / limit;
+
+        pwm1.enable();
+        pwm2.enable();
+        
+        loop{
+            for i in 0..max1 {
+                pwm1.set_duty(i);
+                pwm2.set_duty(max1-i);
+                delay.delay_ms(5_u16);
+            }
+            for i in 0..max1 {
+                pwm2.set_duty(i);
+                pwm1.set_duty(max1-i);
+                delay.delay_ms(5_u16);
+            }
         }
     }
 }
