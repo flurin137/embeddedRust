@@ -27,6 +27,7 @@ static PWM: Mutex<RefCell<Option<pwm::Pwm<pac::TIM2, pwm::C2, pwm::Assigned<gpio
 
 static SPEED_COUNTER: Mutex<Cell<u16>> = Mutex::new(Cell::new(0));
 static TIME_COUNTER: Mutex<Cell<u16>> = Mutex::new(Cell::new(0));
+static MAX: Mutex<Cell<u16>> = Mutex::new(Cell::new(0));
 
 #[entry]
 fn main() -> ! {
@@ -53,11 +54,12 @@ fn main() -> ! {
     pwm.enable();
     
     let max = pwm.get_max_duty();
-    pwm.set_duty(max);
 
     cortex_m::interrupt::free(|cs| {
         *PWM.borrow(cs).borrow_mut() = Some(pwm);
         *TIMER.borrow(cs).borrow_mut() = Some(timer);
+
+        MAX.borrow(cs).set(max);
     });
 
     unsafe {
@@ -73,17 +75,17 @@ fn main() -> ! {
 #[interrupt]
 fn EXTI2_3() {
     cortex_m::interrupt::free(|cs| {
-        let value = SPEED_COUNTER.borrow(cs).get();
-        SPEED_COUNTER.borrow(cs).set(value + 1);
+        Exti::unpend(GpioLine::from_raw_line(2).unwrap());
+        SPEED_COUNTER.borrow(cs).set(SPEED_COUNTER.borrow(cs).get() + 1);
     });
 }
 
 #[interrupt]
 fn TIM3() {
     cortex_m::interrupt::free(|cs| {
-
         let time = TIME_COUNTER.borrow(cs).get();
-        let value = SPEED_COUNTER.borrow(cs).get();
+        let value = SPEED_COUNTER.borrow(cs).get() + 1;
+        let max = MAX.borrow(cs).get();
 
         TIME_COUNTER.borrow(cs).set(time + 1);
 
@@ -93,12 +95,11 @@ fn TIM3() {
 
         if let Some(ref mut pwm) = PWM.borrow(cs).borrow_mut().deref_mut()
         {
-            let max = pwm.get_max_duty();
-            pwm.set_duty( max / 3);
+            pwm.set_duty(max / 12 * value);
 
-            if time % 3 == 0
+            if time % 5 == 0
             {
-                pwm.set_duty(max);
+                SPEED_COUNTER.borrow(cs).set(0);
             }   
         }
     });
