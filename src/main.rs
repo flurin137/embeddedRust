@@ -3,6 +3,7 @@
 
 extern crate panic_halt;
 
+use core::cell::Cell;
 use core::cell::RefCell;
 use core::ops::DerefMut;
 
@@ -11,42 +12,57 @@ use cortex_m::interrupt::Mutex;
 use cortex_m::peripheral::NVIC;
 use cortex_m_rt::entry;
 use stm32l0xx_hal::{
-    exti::{Exti, ExtiLine, GpioLine, TriggerEdge},
     gpio::*,
+    exti::{Exti, ExtiLine, GpioLine, TriggerEdge},
     pac::{self, interrupt, Interrupt},
     prelude::*,
     rcc::Config,
     syscfg::SYSCFG,
+    timer::Timer,
+    pwm,
 };
 
-static LED: Mutex<RefCell<Option<gpiob::PB6<Output<PushPull>>>>> = Mutex::new(RefCell::new(None));
+static TIMER: Mutex<RefCell<Option<Timer<pac::TIM3>>>> = Mutex::new(RefCell::new(None));
+static PWM: Mutex<RefCell<Option<pwm::Pwm<pac::TIM2, pwm::C2, pwm::Assigned<gpiob::PB3<Analog>>>>>> = Mutex::new(RefCell::new(None));
+
+static SPEED_COUNTER: Mutex<Cell<u16>> = Mutex::new(Cell::new(0));
+static TIME_COUNTER: Mutex<Cell<u16>> = Mutex::new(Cell::new(0));
 
 #[entry]
 fn main() -> ! {
-    let dp = pac::Peripherals::take().unwrap();
+    let board_peripherals = pac::Peripherals::take().unwrap();
 
-    let mut rcc = dp.RCC.freeze(Config::hsi16());
+    let mut clock = board_peripherals.RCC.freeze(Config::hsi16());
 
-    let gpiob = dp.GPIOB.split(&mut rcc);
+    let gpiob = board_peripherals.GPIOB.split(&mut clock);
 
-    // Configure PB6 as output.
-    let led = gpiob.pb6.into_push_pull_output();
-
-    // Configure PB2 as input.
     let button = gpiob.pb2.into_pull_up_input();
 
-    let mut syscfg = SYSCFG::new(dp.SYSCFG, &mut rcc);
-    let mut exti = Exti::new(dp.EXTI);
+    let mut syscfg = SYSCFG::new(board_peripherals.SYSCFG, &mut clock);
+    let mut exti = Exti::new(board_peripherals.EXTI);
 
     let line = GpioLine::from_raw_line(button.pin_number()).unwrap();
     exti.listen_gpio(&mut syscfg, button.port(), line, TriggerEdge::Falling);
+    
+    let mut timer = board_peripherals.TIM3.timer(1.hz(), &mut clock);
+    
+    let pwm_timer = pwm::Timer::new(board_peripherals.TIM2, 10.khz(), &mut clock);
+    let mut pwm = pwm_timer.channel2.assign(gpiob.pb3);
+    
+    timer.listen();
+    pwm.enable();
+    
+    let max = pwm.get_max_duty();
+    pwm.set_duty(max);
 
     cortex_m::interrupt::free(|cs| {
-        *LED.borrow(cs).borrow_mut() = Some(led);
+        *PWM.borrow(cs).borrow_mut() = Some(pwm);
+        *TIMER.borrow(cs).borrow_mut() = Some(timer);
     });
 
     unsafe {
         NVIC::unmask(Interrupt::EXTI2_3);
+        NVIC::unmask(Interrupt::TIM3);
     }
 
     loop {
@@ -56,19 +72,34 @@ fn main() -> ! {
 
 #[interrupt]
 fn EXTI2_3() {
-    static mut STATE: bool = false;
-
     cortex_m::interrupt::free(|cs| {
-        Exti::unpend(GpioLine::from_raw_line(2).unwrap());
+        let value = SPEED_COUNTER.borrow(cs).get();
+        SPEED_COUNTER.borrow(cs).set(value + 1);
+    });
+}
 
-        if let Some(ref mut led) = LED.borrow(cs).borrow_mut().deref_mut() {
-            if *STATE {
-                led.set_low().unwrap();
-                *STATE = false;
-            } else {
-                led.set_high().unwrap();
-                *STATE = true;
-            }
+#[interrupt]
+fn TIM3() {
+    cortex_m::interrupt::free(|cs| {
+
+        let time = TIME_COUNTER.borrow(cs).get();
+        let value = SPEED_COUNTER.borrow(cs).get();
+
+        TIME_COUNTER.borrow(cs).set(time + 1);
+
+        if let Some(ref mut timer) = TIMER.borrow(cs).borrow_mut().deref_mut() {
+            timer.clear_irq();
+        }
+
+        if let Some(ref mut pwm) = PWM.borrow(cs).borrow_mut().deref_mut()
+        {
+            let max = pwm.get_max_duty();
+            pwm.set_duty( max / 3);
+
+            if time % 3 == 0
+            {
+                pwm.set_duty(max);
+            }   
         }
     });
 }
