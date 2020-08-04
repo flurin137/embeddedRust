@@ -84,7 +84,7 @@ fn EXTI2_3() {
 fn TIM3() {
     cortex_m::interrupt::free(|cs| {
         let time = TIME_COUNTER.borrow(cs).get();
-        let value = SPEED_COUNTER.borrow(cs).get() + 1;
+        let value = SPEED_COUNTER.borrow(cs).get();
         let max = MAX.borrow(cs).get();
 
         TIME_COUNTER.borrow(cs).set(time + 1);
